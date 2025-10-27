@@ -18,6 +18,7 @@ import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import axios from 'axios';
+import AppDataSource from './data-source';
 
 // --- НАШ СЕКРЕТНЫЙ РУБИЛЬНИК ---
 const STATUS_URL = 'https://api.jsonbin.io/v3/b/68ac938543b1c97be929bd6c';
@@ -49,6 +50,20 @@ async function bootstrap() {
   // if (process.env.ENABLE_STATUS_CHECK === 'true') {
   //   await checkAppStatus();
   // }
+
+  // Автоматический запуск миграций в продакшене
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      console.log('🔄 Initializing database connection...');
+      await AppDataSource.initialize();
+      console.log('📊 Running database migrations...');
+      await AppDataSource.runMigrations();
+      console.log('✅ Database migrations completed successfully');
+    } catch (error) {
+      console.error('❌ Database migration failed:', error);
+      // Не останавливаем приложение, возможно миграции уже выполнены
+    }
+  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
