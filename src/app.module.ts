@@ -20,6 +20,7 @@ import { FinanceModule } from './finance/finance.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TasksModule } from './tasks/tasks.module';
 import { GeneratedDocument } from './documents/entities/generated-document.entity';
+import { DatabaseInitService } from './database-init.service';
 
 @Module({
   imports: [
@@ -61,6 +62,6 @@ import { GeneratedDocument } from './documents/entities/generated-document.entit
     GeneratedDocument
   ],
   controllers: [AppController], // Корневой контроллер
-  providers: [AppService], // Корневой сервис
+  providers: [AppService, DatabaseInitService], // Корневой сервис
 })
 export class AppModule {}
