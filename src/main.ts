@@ -46,16 +46,18 @@ async function checkAppStatus() {
 
 
 async function bootstrap() {
+  console.log('🚀 Starting Neo OSI Backend...');
+  
   // Status check временно отключена
   // if (process.env.ENABLE_STATUS_CHECK === 'true') {
   //   await checkAppStatus();
   // }
 
-  // Автоматический запуск миграций (всегда в продакшене или при наличии DATABASE_URL)
-  const shouldRunMigrations = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('render.com');
+  // ПРИНУДИТЕЛЬНЫЙ запуск миграций для всех случаев, где есть DATABASE_URL
+  const shouldRunMigrations = !!process.env.DATABASE_URL;
   console.log('🔍 Migration check:', {
     nodeEnv: process.env.NODE_ENV,
-    hasRenderUrl: !!process.env.DATABASE_URL?.includes('render.com'),
+    databaseUrl: process.env.DATABASE_URL ? 'Present' : 'Missing',
     shouldRun: shouldRunMigrations
   });
   
@@ -69,8 +71,11 @@ async function bootstrap() {
       });
       
       if (!AppDataSource.isInitialized) {
+        console.log('⚡ Connecting to database...');
         await AppDataSource.initialize();
         console.log('✅ Database connection initialized');
+      } else {
+        console.log('ℹ️ Database already initialized');
       }
       
       console.log('📊 Running database migrations...');
@@ -78,13 +83,30 @@ async function bootstrap() {
       console.log(`✅ Applied ${migrations.length} migrations successfully`);
       
       if (migrations.length === 0) {
-        console.log('ℹ️ No pending migrations found');
+        console.log('ℹ️ No pending migrations found - checking if tables exist...');
+        
+        // Проверяем, существует ли таблица users
+        try {
+          const result = await AppDataSource.query("SELECT COUNT(*) FROM users LIMIT 1");
+          console.log('✅ Users table exists and accessible');
+        } catch (tableError) {
+          console.error('❌ Users table does not exist - this is the problem!');
+          console.error('🔧 You may need to manually run migrations in the database');
+        }
       }
       
     } catch (error) {
       console.error('❌ Database migration failed:', error.message);
       console.error('🔍 Full error:', error);
-      // Не останавливаем приложение, но логируем подробности
+      
+      // Пробуем создать таблицы принудительно
+      try {
+        console.log('🔧 Attempting emergency database setup...');
+        await AppDataSource.synchronize(true); // Принудительная синхронизация
+        console.log('✅ Emergency database sync completed');
+      } catch (syncError) {
+        console.error('❌ Emergency sync also failed:', syncError.message);
+      }
     }
   }
 

@@ -59,6 +59,15 @@ export class TasksService {
   @Cron(CronExpression.EVERY_10_MINUTES)
   async handleExpiredSubscriptions() {
     this.logger.log('Запущена проверка истекших премиум-подписок...');
+    
+    // Проверяем, что база данных доступна
+    try {
+      await this.usersService.findOneById(1); // Простая проверка доступности БД
+    } catch (dbError) {
+      this.logger.warn('База данных недоступна, пропускаем проверку подписок');
+      return;
+    }
+    
     try {
       const deactivatedCount = await this.usersService.deactivateExpiredPremiums();
       if (deactivatedCount > 0) {
