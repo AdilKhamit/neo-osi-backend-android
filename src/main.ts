@@ -51,17 +51,40 @@ async function bootstrap() {
   //   await checkAppStatus();
   // }
 
-  // Автоматический запуск миграций в продакшене
-  if (process.env.NODE_ENV === 'production') {
+  // Автоматический запуск миграций (всегда в продакшене или при наличии DATABASE_URL)
+  const shouldRunMigrations = process.env.NODE_ENV === 'production' || process.env.DATABASE_URL?.includes('render.com');
+  console.log('🔍 Migration check:', {
+    nodeEnv: process.env.NODE_ENV,
+    hasRenderUrl: !!process.env.DATABASE_URL?.includes('render.com'),
+    shouldRun: shouldRunMigrations
+  });
+  
+  if (shouldRunMigrations) {
     try {
       console.log('🔄 Initializing database connection...');
-      await AppDataSource.initialize();
+      console.log('📋 Database config:', {
+        url: process.env.DATABASE_URL ? '✓ Present' : '✗ Missing',
+        host: process.env.DB_HOST || 'Not set',
+        port: process.env.DB_PORT || 'Not set',
+      });
+      
+      if (!AppDataSource.isInitialized) {
+        await AppDataSource.initialize();
+        console.log('✅ Database connection initialized');
+      }
+      
       console.log('📊 Running database migrations...');
-      await AppDataSource.runMigrations();
-      console.log('✅ Database migrations completed successfully');
+      const migrations = await AppDataSource.runMigrations();
+      console.log(`✅ Applied ${migrations.length} migrations successfully`);
+      
+      if (migrations.length === 0) {
+        console.log('ℹ️ No pending migrations found');
+      }
+      
     } catch (error) {
-      console.error('❌ Database migration failed:', error);
-      // Не останавливаем приложение, возможно миграции уже выполнены
+      console.error('❌ Database migration failed:', error.message);
+      console.error('🔍 Full error:', error);
+      // Не останавливаем приложение, но логируем подробности
     }
   }
 

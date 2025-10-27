@@ -23,6 +23,7 @@
     "migration:run:local": "npm run typeorm:local -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
     "db:migrate:prod": "typeorm migration:run -d dist/data-source.js",
+    "postbuild": "npm run db:migrate:prod",
     "cache": "node cache-knowledge-base.js"
   },
   "dependencies": {
