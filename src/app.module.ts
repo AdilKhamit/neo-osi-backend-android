@@ -1,7 +1,6 @@
 /**
  * @file src/app.module.ts
  * @description Корневой модуль приложения NestJS.
- * Собирает все функциональные модули, настраивает конфигурацию и подключение к базе данных.
  */
 
 import { Module } from '@nestjs/common';
@@ -9,9 +8,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { DatabaseInitService } from './database-init.service'; // Не забываем импорт
+
+// Контроллер для теста категорий
+import { CategoriesController } from './categories.controller';
+
+// --- ИМПОРТЫ МОДУЛЕЙ ---
 import { AiModule } from './ai/ai.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { MailModule } from './mail/mail.module'; // <-- Вернули почту
 import { DataImportModule } from './data-import/data-import.module';
 import { ChatModule } from './chat/chat.module';
 import { DocumentsModule } from './documents/documents.module';
@@ -19,18 +25,14 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { FinanceModule } from './finance/finance.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TasksModule } from './tasks/tasks.module';
-import { GeneratedDocument } from './documents/entities/generated-document.entity';
-import { DatabaseInitService } from './database-init.service';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    // Глобальный модуль конфигурации для доступа к .env файлам
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-    // Асинхронная настройка подключения к базе данных PostgreSQL
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -42,26 +44,27 @@ import { DatabaseInitService } from './database-init.service';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        // Переопределяем entities и migrations, чтобы они работали с TS-файлами в разработке
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
-        synchronize: false, // ВНИМАНИЕ: true только для разработки. Автоматически применяет схему.
+        synchronize: true, // Для разработки true ок, для продакшена лучше false
         logging: configService.get<string>('DB_LOGGING') === 'true',
       }),
     }),
-    // Подключение всех функциональных модулей приложения
+    
+    // ФУНКЦИОНАЛЬНЫЕ МОДУЛИ
     AiModule,
     UsersModule,
     AuthModule,
+    MailModule, // <-- Обязательно нужен
     DataImportModule,
     DocumentsModule,
     ChatModule,
     SubscriptionsModule,
     FinanceModule,
     TasksModule,
-    GeneratedDocument
+    // GeneratedDocument <-- УБРАЛИ (ЭТО БЫЛА ОШИБКА, ЭТО НЕ МОДУЛЬ)
   ],
-  controllers: [AppController], // Корневой контроллер
-  providers: [AppService, DatabaseInitService], // Корневой сервис
+  controllers: [AppController, CategoriesController], // <-- Добавили CategoriesController
+  providers: [AppService, DatabaseInitService],
 })
 export class AppModule {}
