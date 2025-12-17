@@ -1,17 +1,15 @@
-/**
- * @file src/app.module.ts
- * @description Корневой модуль приложения NestJS.
- * Собирает все функциональные модули, настраивает конфигурацию и подключение к базе данных.
- */
-
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { AiModule } from './ai/ai.module';
+import { DatabaseInitService } from './database-init.service';
+import { CategoriesController } from './categories.controller'; // <-- Категории
+
+import { AiModule } from './ai/ai.module'; // <-- ВАЖНО: AI Модуль
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { MailModule } from './mail/mail.module'; // <-- ВАЖНО: Почта
 import { DataImportModule } from './data-import/data-import.module';
 import { ChatModule } from './chat/chat.module';
 import { DocumentsModule } from './documents/documents.module';
@@ -19,18 +17,11 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { FinanceModule } from './finance/finance.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TasksModule } from './tasks/tasks.module';
-import { GeneratedDocument } from './documents/entities/generated-document.entity';
-import { DatabaseInitService } from './database-init.service';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    // Глобальный модуль конфигурации для доступа к .env файлам
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
-    // Асинхронная настройка подключения к базе данных PostgreSQL
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -42,26 +33,24 @@ import { DatabaseInitService } from './database-init.service';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        // Переопределяем entities и migrations, чтобы они работали с TS-файлами в разработке
         entities: [__dirname + '/**/*.entity{.ts,.js}'],
         migrations: [__dirname + '/migrations/*{.ts,.js}'],
-        synchronize: false, // ВНИМАНИЕ: true только для разработки. Автоматически применяет схему.
+        synchronize: true, // Включаем синхронизацию для скорости
         logging: configService.get<string>('DB_LOGGING') === 'true',
       }),
     }),
-    // Подключение всех функциональных модулей приложения
-    AiModule,
+    AiModule, // <-- ВКЛЮЧИЛИ
     UsersModule,
     AuthModule,
+    MailModule,
     DataImportModule,
     DocumentsModule,
     ChatModule,
     SubscriptionsModule,
     FinanceModule,
     TasksModule,
-    GeneratedDocument
   ],
-  controllers: [AppController], // Корневой контроллер
-  providers: [AppService, DatabaseInitService], // Корневой сервис
+  controllers: [AppController, CategoriesController],
+  providers: [AppService, DatabaseInitService],
 })
 export class AppModule {}
