@@ -26,8 +26,8 @@ import { User } from '../users/entities/user.entity';
 import * as crypto from 'crypto';
 import { TEMPLATES_REGISTRY } from './templates.registry';
 import { ChatHistoryService } from 'src/chat/history/history.service';
-import { ChatAiService } from './chat-ai.service'; // <-- НОВЫЙ СЕРВИС
-import { DocumentAiService } from './document-ai.service'; // <-- НОВЫЙ СЕРВИС
+import { ChatAiService } from './chat-ai.service';
+import { DocumentAiService } from './document-ai.service';
 import { ChatType } from 'src/chat/entities/chat-message.entity';
 import { createReadStream } from 'fs';
 import * as path from 'path';
@@ -52,13 +52,13 @@ export class AiController {
    * Отвечает за ведение диалога, ответы на вопросы, RAG.
    */
 
-  /**
-   * Эндпоинт для "ИИ-Чат".
-   */
-  @UseGuards(JwtAuthGuard)
+  // ВРЕМЕННО ОТКЛЮЧИЛИ ЗАЩИТУ ДЛЯ ТЕСТА В POSTMAN
+  // @UseGuards(JwtAuthGuard) 
   @Post('chat')
   async chatWithAssistant(@Request() req, @Body() generateDto: GenerateDocumentDto) {
-    const userId = req.user.userId;
+    // ВРЕМЕННО: Ставим ID = 1, чтобы сервер знал "фейкового" пользователя
+    const userId = 1; 
+    // const userId = req.user.userId; // <-- Оригинальная строка
     
     // Проверяем, что prompt не пустой
     if (!generateDto.prompt || generateDto.prompt.trim() === '') {
