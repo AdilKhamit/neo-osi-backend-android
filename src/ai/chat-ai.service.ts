@@ -37,6 +37,8 @@ export class ChatAiService implements OnModuleInit {
     private readonly RAG_CHUNK_OVERLAP = 420;
     private readonly RAG_VECTOR_TOPK = 480;
     private readonly RAG_HARD_CONTEXT_LIMIT = 400000;
+    
+    // СПИСОК КЛЮЧЕВЫХ СЛОВ (Оставляем как был)
     private readonly keywordToFileMap = [
         { "keywords": ["определение", "термин", "что такое", "понятие", "означает"], "files": ["СТ РК 2966-2023.pdf.txt", "Закон Республики Казахстан от 15 июля 2025 года № 207-VIII О внесении изменений и дополнений в некоторые законодательные акты.pdf.txt"] },
         { "keywords": ["капитальный ремонт", "капремонт", "модернизация", "реконструкция"], "files": ["СТ РК 2978-2023 Жилищно-коммунальное хозяйство. Проведение капитального ремонта общего имущества объекта кондоминиума. Общие тре.pdf.txt", "Закон Республики Казахстан от 15 июля 2025 года № 207-VIII О внесении изменений и дополнений в некоторые законодательные акты.pdf.txt", "СТ РК 2979-2017.pdf.txt"] },
@@ -70,9 +72,10 @@ export class ChatAiService implements OnModuleInit {
         if (!apiKey) throw new Error('GEMINI_API_KEY отсутствует в .env');
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // 👇 ИСПРАВЛЕНО: Убрано -latest
-        this.primaryModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-        this.fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        
+        // 👇 ЗДЕСЬ ИЗМЕНЕНИЯ: Добавили -001 для стабильности
+        this.primaryModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-001' });
+        this.fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
 
         this.embeddings = new GoogleGenerativeAIEmbeddings({
             apiKey,
@@ -187,7 +190,6 @@ export class ChatAiService implements OnModuleInit {
             return msg;
         }
 
-        // --- Если это не запрос на создание документа, продолжаем как обычно ---
         const language = await this.detectLanguage(prompt);
         const history = await this.chatHistoryService.getHistory(userId, ChatType.GENERAL);
 
@@ -196,29 +198,21 @@ export class ChatAiService implements OnModuleInit {
             await this.chatHistoryService.addMessageToHistory(userId, prompt, msg, ChatType.GENERAL);
             return msg;
         }
-        // --- Улучшенный RAG Pipeline ---
-        // 1. "Мягкий" гейтинг по ключевым словам для выбора файлов
-        let mappedFiles = this._getRelevantSourceFiles(prompt);
 
-        // 2. Эвристика для юридических/определяющих вопросов
+        let mappedFiles = this._getRelevantSourceFiles(prompt);
         if (this.isLegalQuestion(prompt) || this.isDefinitionQuestion(prompt)) {
             mappedFiles = [...new Set([...mappedFiles, ...this.BASE_LAW_FILES])];
             this.logger.log(`Вопрос определен как юридический/определяющий. Добавлены базовые законы.`);
         }
 
-        // 3. Фильтруем документы для поиска
         const docsForSearch = mappedFiles.length > 0
             ? this.allDocs.filter(d => mappedFiles.includes(d.metadata.source as string))
             : this.allDocs;
         this.logger.log(`Поиск будет произведен по ${docsForSearch.length} чанкам из ${mappedFiles.length > 0 ? mappedFiles.length : 'всех'} документов.`);
 
-        // 4. Усиленный гибридный поиск и расширение контекста
-        const retrievedDocs = await this._getRelevantDocsAccurate(prompt, this.RAG_VECTOR_TOPK, docsForSearch); // <-- ИСПРАВЛЕНО
+        const retrievedDocs = await this._getRelevantDocsAccurate(prompt, this.RAG_VECTOR_TOPK, docsForSearch); 
 
-        // 5. Построение контекста
         const context = this._buildContext(retrievedDocs);
-
-        // 6. Генерация финального ответа
         const answer = await this._generateFinalAnswer(prompt, context, language);
 
         await this.chatHistoryService.addMessageToHistory(userId, prompt, answer, ChatType.GENERAL);
@@ -232,13 +226,9 @@ export class ChatAiService implements OnModuleInit {
         const dynamicTopK = Math.max(240, terms.length * 120);
 
         const { strong, weak } = this._keywordSearch(terms, docsForSearch);
-        this.logger.log(`[RAG] Keyword Search: ${strong.length} strong, ${weak.length} weak hits.`);
-
         const vectorResults = await this.vectorStore.similaritySearch(question, dynamicTopK);
         const vectorSources = new Set(docsForSearch.map(d => d.metadata.source));
         const filteredVector = vectorResults.filter(doc => vectorSources.has(doc.metadata.source));
-        this.logger.log(`[RAG] Vector Search: ${filteredVector.length} hits after filtering.`);
-
         const combined = [...new Set([...strong, ...weak, ...filteredVector])];
         if (combined.length === 0) {
             this.logger.warn(`[RAG] Zero hits for query: "${question}".`);
@@ -247,7 +237,6 @@ export class ChatAiService implements OnModuleInit {
 
         const sources = new Set(combined.map(d => d.metadata.source as string));
         const expanded = this.allDocs.filter(d => sources.has(d.metadata.source as string));
-        this.logger.log(`[RAG] Context expanded to ${expanded.length} chunks from ${sources.size} sources.`);
         return expanded;
     }
 
@@ -378,7 +367,6 @@ export class ChatAiService implements OnModuleInit {
     `.trim();
 
         const rawAnswer = await this.generateWithRetry(finalPrompt);
-        // Финальная очистка от markdown на всякий случай
         return rawAnswer.replace(/[*#_`~]/g, '');
     }
 
@@ -410,13 +398,11 @@ export class ChatAiService implements OnModuleInit {
         `;
 
         try {
-            // Используем быстрый вызов без истории
             const result = await this.generateWithRetry(intentPrompt);
-            // Проверяем, содержит ли ответ "ДА" без учета регистра
             return /да/i.test(result.trim());
         } catch (error) {
             this.logger.error("Ошибка при определении намерения создать документ:", error);
-            return false; // В случае ошибки считаем, что это информационный запрос (безопасный fallback)
+            return false;
         }
     }
     private isGreeting(prompt: string, history: Content[]): boolean { return /^(привет|сәлем|hello|здравствуйте)$/i.test(prompt.trim()) && history.length < 2; }
@@ -426,21 +412,7 @@ export class ChatAiService implements OnModuleInit {
     public async detectLanguage(text: string): Promise<Lang> {
         const prompt = `
     Твоя задача — точно определить основной язык текста.
-    
-    **КРИТИЧЕСКИ ВАЖНЫЕ ПРАВИЛА:**
-    1.  **"Шала-казахский" — это КАЗАХСКИЙ.** Это смешанный язык, где используются русские и казахские слова. Если видишь такое — всегда выбирай 'kz'.
-    2.  **Отсутствие диакритик — это КАЗАХСКИЙ.** Казахский текст часто пишут без специальных символов (ә, і, ғ, қ, ң, ө, ұ, ү, һ). Например, "маган улкен комек керек" — это 'kz'.
-    3.  **Приоритет у казахского:** Если в тексте есть и русские, и казахские слова, но ключевой смысл или основные термины казахские — это 'kz'.
-    
-    **ПРИМЕРЫ:**
-    -   "маган улкен комек керек боп тур" -> kz
-    -   "калайсын брат, документ жасау керек" -> kz
-    -   "справка керек емес" -> kz
-    -   "Привет, как дела?" -> ru
-    -   "Дай мне список документов" -> ru
-    
     **Текст для анализа:** "${text}"
-    
     **Твой ответ должен быть ТОЛЬКО ОДНИМ СЛОВОМ:** 'ru' или 'kz'.
     `.trim();
 
@@ -450,7 +422,7 @@ export class ChatAiService implements OnModuleInit {
             return result === 'kz' ? 'kz' : 'ru';
         } catch (error) {
             this.logger.error(`Ошибка при определении языка для текста: "${text}"`, error);
-            return 'ru'; // Безопасный fallback
+            return 'ru';
         }
     }
 
@@ -468,7 +440,6 @@ export class ChatAiService implements OnModuleInit {
                     await delay(wait);
                     continue;
                 }
-                // Если это последняя попытка на основной модели, пробуем резервную
                 if (i === retries - 1 && model !== this.fallbackModel) {
                     console.warn('[AI Service] Основная модель не ответила. Переключаюсь на резервную...');
                     try {
@@ -477,10 +448,10 @@ export class ChatAiService implements OnModuleInit {
                         return r2.response.text();
                     } catch (e2) {
                         console.error('[AI Service] Резервная модель также не ответила.', e2);
-                        throw e2; // Выбрасываем ошибку резервной модели
+                        throw e2;
                     }
                 }
-                throw err; // Выбрасываем исходную ошибку, если все попытки провалились
+                throw err;
             }
         }
         throw new Error('generateWithRetry: не удалось получить ответ от AI после всех попыток.');
