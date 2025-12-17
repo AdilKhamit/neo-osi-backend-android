@@ -10,8 +10,6 @@ import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 
 // ⚠️ Если у вас langchain >= 0.2.x:
 import { HNSWLib } from '@langchain/community/vectorstores/hnswlib';
-// ⚠️ Если langchain < 0.2.x, замените импорт выше на:
-// import { HNSWLib } from 'langchain/vectorstores/hnswlib';
 
 import { ChatHistoryService } from '../chat/history/history.service';
 import { TEMPLATES_REGISTRY } from './templates.registry';
@@ -33,12 +31,16 @@ export class ChatAiService implements OnModuleInit {
     private currentLanguage: Lang = 'ru';
     private readonly TEXT_CACHE_DIR = path.join(process.cwd(), '.pdf-cache');
     private readonly INDEX_DIR = path.join(process.cwd(), '.rag-index');
-    private readonly RAG_CHUNK_SIZE = 900;
-    private readonly RAG_CHUNK_OVERLAP = 420;
-    private readonly RAG_VECTOR_TOPK = 480;
-    private readonly RAG_HARD_CONTEXT_LIMIT = 400000;
     
-    // КЛЮЧЕВЫЕ СЛОВА (Оставляем как были)
+    // --- НАСТРОЙКИ "LITE" (ЧТОБЫ НЕ БЫЛО ОШИБКИ 429) ---
+    private readonly RAG_CHUNK_SIZE = 1000;
+    private readonly RAG_CHUNK_OVERLAP = 200;
+    // Уменьшили с 480 до 15 (Берем только 15 лучших кусков текста)
+    private readonly RAG_VECTOR_TOPK = 15; 
+    // Уменьшили лимит символов, чтобы не забивать контекст
+    private readonly RAG_HARD_CONTEXT_LIMIT = 20000; 
+    // ----------------------------------------------------
+
     private readonly keywordToFileMap = [
         { "keywords": ["определение", "термин", "что такое", "понятие", "означает"], "files": ["СТ РК 2966-2023.pdf.txt", "Закон Республики Казахстан от 15 июля 2025 года № 207-VIII О внесении изменений и дополнений в некоторые законодательные акты.pdf.txt"] },
         { "keywords": ["капитальный ремонт", "капремонт", "модернизация", "реконструкция"], "files": ["СТ РК 2978-2023 Жилищно-коммунальное хозяйство. Проведение капитального ремонта общего имущества объекта кондоминиума. Общие тре.pdf.txt", "Закон Республики Казахстан от 15 июля 2025 года № 207-VIII О внесении изменений и дополнений в некоторые законодательные акты.pdf.txt", "СТ РК 2979-2017.pdf.txt"] },
@@ -72,15 +74,10 @@ export class ChatAiService implements OnModuleInit {
         if (!apiKey) throw new Error('GEMINI_API_KEY отсутствует в .env');
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        
-        // 🔥 ПЕРЕХОДИМ НА GEMINI 2.0 (Экспериментальная, но мощная)
+        // Используем работающую 2.0 модель
         this.primaryModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-        
-        // В качестве запасной используем ТУ ЖЕ модель (так как 1.5 у нас не работает)
-        // Либо можно попробовать самую старую 'gemini-pro' (1.0), но лучше 2.0
         this.fallbackModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 
-        // Для векторов используем более современную модель 004
         this.embeddings = new GoogleGenerativeAIEmbeddings({
             apiKey,
             model: 'text-embedding-004', 
@@ -214,6 +211,7 @@ export class ChatAiService implements OnModuleInit {
             : this.allDocs;
         this.logger.log(`Поиск будет произведен по ${docsForSearch.length} чанкам из ${mappedFiles.length > 0 ? mappedFiles.length : 'всех'} документов.`);
 
+        // Используем константу из начала файла
         const retrievedDocs = await this._getRelevantDocsAccurate(prompt, this.RAG_VECTOR_TOPK, docsForSearch); 
 
         const context = this._buildContext(retrievedDocs);
@@ -227,7 +225,7 @@ export class ChatAiService implements OnModuleInit {
         if (!this.vectorStore) return [];
 
         const terms = this._extractSearchTerms(question);
-        const dynamicTopK = Math.max(240, terms.length * 120);
+        const dynamicTopK = Math.max(20, terms.length * 10); // Уменьшили динамический лимит
 
         const { strong, weak } = this._keywordSearch(terms, docsForSearch);
         const vectorResults = await this.vectorStore.similaritySearch(question, dynamicTopK);
@@ -247,6 +245,7 @@ export class ChatAiService implements OnModuleInit {
     private _buildContext(docs: Document[]): string {
         if (docs.length === 0) return 'НЕТ РЕЛЕВАНТНЫХ ДАННЫХ';
         const context = docs.map(d => `ИСТОЧНИК: ${d.metadata.source}\n${d.pageContent}`).join('\n\n---\n\n');
+        // Используем константу
         if (context.length > this.RAG_HARD_CONTEXT_LIMIT) {
             return context.slice(0, this.RAG_HARD_CONTEXT_LIMIT) + "\n... (контекст был сокращен)";
         }
