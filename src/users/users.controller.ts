@@ -68,7 +68,8 @@ export class UsersController {
       user: {
         id: updatedUser.id,
         email: updatedUser.email,
-        generation_count: updatedUser.generation_count,
+        // 👇 ИСПРАВЛЕНО: generations_count (с буквой s)
+        generations_count: updatedUser.generations_count,
       },
     };
   }
@@ -89,5 +90,4 @@ export class UsersController {
       changePasswordDto.newPassword,
     );
   }
-  
 }
