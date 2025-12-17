@@ -60,8 +60,8 @@ export class DocumentAiService implements OnModuleInit {
             throw new Error('GEMINI_API_KEY не найден в .env файле!');
         }
         const genAI = new GoogleGenerativeAI(apiKey);
-        this.primaryModel = genAI.getGenerativeModel({ model: 'gemini-1.5-pro-latest' });
-        this.fallbackModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+        this.primaryModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+        this.fallbackModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
         console.log('[AI Service] Основная и резервная модели Gemini успешно инициализированы.');
 
         this.loadAndValidateTemplates();
@@ -133,7 +133,7 @@ export class DocumentAiService implements OnModuleInit {
 
         // --- Попытка 1: Основная, самая мощная модель ---
         try {
-            console.log(`[AI Service] Обращение к основной модели (gemini-1.5-pro)...`);
+            console.log(`[AI Service] Обращение к основной модели (gemini-2.0-flash-exp)...`);
             for (let attempt = 1; attempt <= retries; attempt++) {
                 try {
                     const result = await this.primaryModel.generateContent(prompt);
@@ -155,7 +155,7 @@ export class DocumentAiService implements OnModuleInit {
 
         // --- Попытка 2: Резервная, более быстрая модель ---
         try {
-            console.warn(`[AI Service] Переключаюсь на резервную модель (gemini-1.5-flash)...`);
+            console.warn(`[AI Service] Переключаюсь на резервную модель (gemini-2.0-flash-exp)...`);
             for (let attempt = 1; attempt <= retries; attempt++) {
                 try {
                     const result = await this.fallbackModel.generateContent(prompt);
