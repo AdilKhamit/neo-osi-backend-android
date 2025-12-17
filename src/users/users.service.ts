@@ -69,8 +69,9 @@ export class UsersService {
    * @deprecated
    */
   async incrementGenerationCount(userId: number): Promise<void> {
+    // 👇 ИСПРАВЛЕНО: generations_count (с буквой s)
     await this.usersRepository.update(userId, {
-      generation_count: () => 'generation_count + 1',
+      generations_count: () => 'generations_count + 1', 
       last_generation_date: new Date(),
     });
   }
@@ -80,8 +81,9 @@ export class UsersService {
    * @deprecated
    */
   async resetGenerationCount(userId: number): Promise<void> {
+    // 👇 ИСПРАВЛЕНО: generations_count (с буквой s)
     await this.usersRepository.update(userId, {
-      generation_count: 0,
+      generations_count: 0,
     });
   }
 
@@ -90,7 +92,8 @@ export class UsersService {
     if (!user) {
       return null;
     }
-    user.generation_count = 0;
+    // 👇 ИСПРАВЛЕНО: generations_count (с буквой s)
+    user.generations_count = 0;
     user.last_generation_date = null;
     return this.usersRepository.save(user);
   }
@@ -147,7 +150,7 @@ export class UsersService {
     
     const isMatch = await bcrypt.compare(oldPass, user.password_hash);
     if (!isMatch) {
-        throw new UnauthorizedException('Неверный текущий пароль'); // Добавил проверку для надежности
+        throw new UnauthorizedException('Неверный текущий пароль'); 
     }
 
     const salt = await bcrypt.genSalt();
@@ -200,7 +203,8 @@ export class UsersService {
       fullName: user.full_name,
       phone: user.phone,
       role: user.role,
-      generations_count: user['generations_count'] || 0, // Добавил поле, чтобы фронт видел счетчик
+      // 👇 ИСПРАВЛЕНО: generations_count (с буквой s)
+      generations_count: user.generations_count || 0, 
       subscription: {
         isActive: isPremiumActive,
         expiresAt: isPremiumActive ? user.subscription_expires_at : null,
