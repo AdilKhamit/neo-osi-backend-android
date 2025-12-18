@@ -32,14 +32,11 @@ export class UsersController {
   @Get('profile')
   async getProfile(@Request() req) {
     const userId = req.user.userId;
-    // Вызываем новый метод в UsersService
     return this.usersService.getUserProfile(userId);
   }
 
   /**
    * Защищенный эндпоинт для получения списка протоколов (пример).
-   * @param req - Запрос.
-   * @returns Статический список протоколов.
    */
   @UseGuards(JwtAuthGuard)
   @Get('protocols')
@@ -52,9 +49,67 @@ export class UsersController {
   }
 
   /**
+   * 👇 НОВЫЙ ЭНДПОИНТ: ПОКУПКА ПОДПИСКИ
+   * Принимает planId ('lite', 'plus', 'premium') и обновляет дату подписки.
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('subscribe')
+  async subscribe(@Request() req, @Body() body: { planId: string }) {
+    const userId = req.user.userId;
+    const user = await this.usersService.findOneById(userId);
+    
+    if (!user) {
+      throw new NotFoundException('Пользователь не найден');
+    }
+
+    let monthsToAdd = 0;
+    let newTariffName = 'Free';
+
+    // 1. Определяем условия тарифа
+    switch (body.planId) {
+      case 'lite':
+        monthsToAdd = 1; // 1 месяц
+        newTariffName = 'Lite';
+        break;
+      case 'plus':
+        monthsToAdd = 6; // 6 месяцев
+        newTariffName = 'Plus';
+        break;
+      case 'premium':
+        monthsToAdd = 12; // 1 год
+        newTariffName = 'Premium';
+        break;
+      default:
+        throw new NotFoundException('Указанный тарифный план не найден');
+    }
+
+    // 2. Рассчитываем новую дату окончания
+    const currentDate = new Date();
+    // Если у пользователя уже есть активная подписка, продлеваем её.
+    // Если нет (или истекла) — начинаем отсчет с сегодняшнего дня.
+    const startDate = (user.subscription_expires_at && new Date(user.subscription_expires_at) > currentDate) 
+                      ? new Date(user.subscription_expires_at) 
+                      : currentDate;
+
+    const newExpiryDate = new Date(startDate);
+    newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsToAdd);
+
+    // 3. Обновляем данные в базе
+    // Используем 'as any' для частичного обновления, если в DTO нет этих полей
+    await this.usersService.update(userId, { 
+      tariff: newTariffName,
+      subscription_expires_at: newExpiryDate 
+    } as any);
+
+    return { 
+      message: `Тариф ${newTariffName} успешно активирован!`,
+      tariff: newTariffName,
+      expiresAt: newExpiryDate
+    };
+  }
+
+  /**
    * Отладочный эндпоинт для сброса лимита генераций пользователя по email.
-   * @param email - Email пользователя.
-   * @returns Сообщение об успехе и обновленные данные пользователя.
    */
   @Post('reset-limit/:email')
   async resetLimit(@Param('email') email: string) {
@@ -68,7 +123,6 @@ export class UsersController {
       user: {
         id: updatedUser.id,
         email: updatedUser.email,
-        // 👇 ИСПРАВЛЕНО: generations_count (с буквой s)
         generations_count: updatedUser.generations_count,
       },
     };
@@ -77,10 +131,10 @@ export class UsersController {
   /**
    * Эндпоинт для смены пароля аутентифицированным пользователем.
    */
-  @UseGuards(JwtAuthGuard) // <-- Защищаем эндпоинт, доступ только для залогиненных
+  @UseGuards(JwtAuthGuard)
   @Post('change-password')
   async changePassword(
-    @Request() req, // <-- Берем ID пользователя из токена
+    @Request() req,
     @Body() changePasswordDto: ChangePasswordDto,
   ) {
     const userId = req.user.userId;
