@@ -28,16 +28,16 @@ export class UsersService {
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(createUserDto.password, salt);
 
-    // Создаем объект сущности
+    // Создаем объект сущности (используем as any, чтобы обойти проверки на optional поля)
     const newUser = this.usersRepository.create({
       email: createUserDto.email,
       passwordHash: hashedPassword,
       fullName: createUserDto.fullName || undefined, 
       tariff: 'Базовый',
-    } as any); // Используем any для обхода строгих проверок при создании
+    } as any);
 
-    // 👇 ИСПРАВЛЕНО: Явно указываем, что это (as User), чтобы TS не думал, что это массив
-    const savedUser = await this.usersRepository.save(newUser) as User;
+    // 👇 ИСПРАВЛЕНО: Добавлено 'as unknown', чтобы TypeScript разрешил это приведение
+    const savedUser = (await this.usersRepository.save(newUser)) as unknown as User;
 
     const { passwordHash, ...result } = savedUser;
     return result;
