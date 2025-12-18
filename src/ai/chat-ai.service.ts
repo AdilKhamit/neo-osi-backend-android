@@ -19,42 +19,49 @@ export class ChatAiService implements OnModuleInit {
         if (!apiKey) throw new Error('GEMINI_API_KEY is missing');
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        // Используем самую быструю и легкую модель Flash 2.0
+        // Используем самую быструю модель Flash
         this.model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-        this.logger.log('🚀 ChatAiService: ULTRA-LITE режим (Без RAG) активирован');
+        this.logger.log('🚀 ChatAiService: LITE режим с поддержкой generateWithRetry');
     }
 
+    // --- Метод для Чата ---
     async getChatAnswer(prompt: string, userId: number): Promise<string> {
-        this.logger.log(`[Chat Lite] Вопрос от пользователя ${userId}: ${prompt}`);
+        this.logger.log(`[Chat] Запрос от пользователя ${userId}: ${prompt}`);
 
         const systemPrompt = `
-        Ты — "NeoOSI", экспертный AI-ассистент, специализирующийся на вопросах ОСИ и ЖКХ в Казахстане.
-        Твоя задача — консультировать жильцов и председателей.
-        Отвечай вежливо, кратко и по делу. Ссылайся на законы РК, если знаешь их.
-        
-        ЯЗЫК: Твой ответ ДОЛЖЕН БЫТЬ СТРОГО на том же языке, на котором написан вопрос пользователя (казахский или русский).
-        ФОРМАТ: ЗАПРЕЩЕНО использовать Markdown (*, **, #). Только чистый текст и переносы строк.
-        
+        Ты — "NeoOSI", экспертный AI-ассистент по вопросам ОСИ и ЖКХ в Казахстане.
+        Отвечай вежливо, кратко и только текстом без Markdown (*, #).
         Вопрос пользователя: ${prompt}
         `;
 
         try {
-            // Прямой запрос к Gemini без долгого поиска по документам (ответ за 1-2 секунды)
             const result = await this.model.generateContent(systemPrompt);
             const answer = result.response.text();
-
-            // Сохраняем в историю
             await this.chatHistoryService.addMessageToHistory(userId, prompt, answer, ChatType.GENERAL);
-            
             return answer.replace(/[*#_`~]/g, '');
-
         } catch (e) {
-            this.logger.error('Ошибка Gemini:', e);
-            return "Извините, сейчас я не могу ответить. Попробуйте позже.";
+            this.logger.error('Ошибка Gemini в чате:', e);
+            return "Извините, произошла ошибка. Попробуйте еще раз.";
         }
     }
 
-    // Заглушки, чтобы не ломать контроллер и другие части приложения
-    public async detectLanguage(t: string): Promise<'ru' | 'kz'> { return 'ru'; }
-    public async rebuildIndex(): Promise<void> { this.logger.log('Индекс не используется в Lite режиме'); }
+    // --- 👇 ВОТ ЭТОТ МЕТОД НУЖЕН ДЛЯ DocumentAiService 👇 ---
+    async generateWithRetry(prompt: string): Promise<string> {
+        try {
+            const result = await this.model.generateContent(prompt);
+            return result.response.text();
+        } catch (e) {
+            this.logger.error('Ошибка в generateWithRetry:', e);
+            throw e;
+        }
+    }
+
+    // Заглушки для совместимости
+    public async detectLanguage(text: string): Promise<'ru' | 'kz'> {
+        return text.match(/[а-яА-Я]/) ? 'ru' : 'kz';
+    }
+    
+    public async rebuildIndex(): Promise<void> {
+        this.logger.log('Индекс не используется в текущем режиме');
+    }
 }
