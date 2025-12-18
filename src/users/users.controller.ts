@@ -15,8 +15,6 @@ export class UsersController {
 
   /**
    * Эндпоинт для регистрации нового пользователя.
-   * @param createUserDto - Данные для создания пользователя.
-   * @returns Созданный объект пользователя.
    */
   @Post('register')
   create(@Body() createUserDto: CreateUserDto) {
@@ -25,8 +23,6 @@ export class UsersController {
 
   /**
    * Защищенный эндпоинт для получения данных профиля текущего пользователя.
-   * @param req - Запрос, содержащий payload из JWT токена.
-   * @returns Данные пользователя.
    */
   @UseGuards(JwtAuthGuard)
   @Get('profile')
@@ -49,13 +45,20 @@ export class UsersController {
   }
 
   /**
-   * 👇 НОВЫЙ ЭНДПОИНТ: ПОКУПКА ПОДПИСКИ
-   * Принимает planId ('lite', 'plus', 'premium') и обновляет дату подписки.
+   * 👇 ОБНОВЛЕННЫЙ МЕТОД: ПОКУПКА ПОДПИСКИ С ТОКЕНОМ
+   * Принимает planId и purchaseToken от Google Play.
    */
   @UseGuards(JwtAuthGuard)
   @Post('subscribe')
-  async subscribe(@Request() req, @Body() body: { planId: string }) {
+  async subscribe(@Request() req, @Body() body: { planId: string; purchaseToken: string }) {
     const userId = req.user.userId;
+    
+    // Логируем попытку покупки (важно для отладки)
+    console.log(`[Billing] User ${userId} bought ${body.planId}. Token: ${body.purchaseToken?.substring(0, 20)}...`);
+
+    // В БУДУЩЕМ: Здесь будет проверка токена через Google API
+    // if (!isValid(body.purchaseToken)) throw new ForbiddenException('Invalid Token');
+
     const user = await this.usersService.findOneById(userId);
     
     if (!user) {
@@ -85,8 +88,6 @@ export class UsersController {
 
     // 2. Рассчитываем новую дату окончания
     const currentDate = new Date();
-    // Если у пользователя уже есть активная подписка, продлеваем её.
-    // Если нет (или истекла) — начинаем отсчет с сегодняшнего дня.
     const startDate = (user.subscription_expires_at && new Date(user.subscription_expires_at) > currentDate) 
                       ? new Date(user.subscription_expires_at) 
                       : currentDate;
@@ -95,7 +96,6 @@ export class UsersController {
     newExpiryDate.setMonth(newExpiryDate.getMonth() + monthsToAdd);
 
     // 3. Обновляем данные в базе
-    // Используем 'as any' для частичного обновления, если в DTO нет этих полей
     await this.usersService.update(userId, { 
       tariff: newTariffName,
       subscription_expires_at: newExpiryDate 
@@ -109,7 +109,7 @@ export class UsersController {
   }
 
   /**
-   * Отладочный эндпоинт для сброса лимита генераций пользователя по email.
+   * Отладочный эндпоинт для сброса лимита генераций.
    */
   @Post('reset-limit/:email')
   async resetLimit(@Param('email') email: string) {
@@ -129,7 +129,7 @@ export class UsersController {
   }
 
   /**
-   * Эндпоинт для смены пароля аутентифицированным пользователем.
+   * Смена пароля.
    */
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
