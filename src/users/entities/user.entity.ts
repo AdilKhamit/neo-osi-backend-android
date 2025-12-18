@@ -11,25 +11,28 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
-  password_hash: string;
+  // 👇 ИСПРАВЛЕНО: Свойство camelCase для кода, но колонка snake_case для базы
+  @Column({ name: 'password_hash' }) 
+  passwordHash: string;
 
   @Column({ default: 'Базовый' })
   tariff: string;
 
-  @Column({ nullable: true, default: null })
-  full_name: string;
+  // 👇 ВАЖНО: Имя свойства 'fullName' совпадает с DTO, поэтому данные сохранятся!
+  @Column({ name: 'full_name', nullable: true }) 
+  fullName: string;
 
   @Column({ nullable: true, default: null })
   phone: string;
 
   @Column({ default: 'resident' })
-  role: string; // Упростил тип до string для гибкости
+  role: string;
 
+  // Используем snake_case, так как это поле уже используется в контроллере
   @Column({ type: 'timestamp', nullable: true, default: null })
   subscription_expires_at: Date | null;
 
-  // 👇 ВАЖНО: ЭТО ПОЛЕ НУЖНО ДЛЯ СЧЕТЧИКА (1 бесплатно) 👇
+  // 👇 ЭТО ПОЛЕ НУЖНО ДЛЯ СЧЕТЧИКА (1 бесплатно)
   @Column({ default: 0 })
   generations_count: number;
   // ----------------------------------------------------
@@ -43,7 +46,7 @@ export class User {
   @Column({ type: 'boolean', default: false })
   password_change_required: boolean;
 
-  // Поля для ИИ-Документов (Doc Chat State)
+  // --- Поля для ИИ-Документов (Doc Chat State) ---
   @Column({ type: 'varchar', nullable: true, default: null })
   doc_chat_template: string | null;
 
@@ -56,7 +59,6 @@ export class User {
   @Column({ type: 'jsonb', nullable: true, default: {} })
   doc_chat_pending_data: Record<string, any>;
 
-  // Для старой логики (можно оставить на всякий случай)
   @Column({ type: 'timestamp', nullable: true, default: null })
   last_generation_date: Date | null;
 
@@ -68,7 +70,7 @@ export class User {
   @OneToMany(() => ChatMessage, (message) => message.user)
   chatMessages: ChatMessage[];
 
-  // Даты создания/обновления (полезно для админки)
+  // Даты
   @CreateDateColumn()
   created_at: Date;
 
