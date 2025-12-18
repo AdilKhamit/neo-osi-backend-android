@@ -1,4 +1,4 @@
-// src\data-import\data-import.service.ts
+// src/data-import/data-import.service.ts
 
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as XLSX from 'xlsx';
@@ -63,13 +63,14 @@ export class DataImportService {
         if (!user) {
           user = manager.create(User, {
             email,
-            password_hash: 'temp',
+            passwordHash: 'temp', // 👇 ИСПРАВЛЕНО (было password_hash)
             tariff: r['tariff'] || 'Базовый',
-            full_name: r['full_name'] || null,
+            fullName: r['full_name'] || null, // 👇 ИСПРАВЛЕНО (было full_name)
             phone: r['phone'] || null,
           });
         } else {
-          user.full_name = r['full_name'] ?? user.full_name;
+          // 👇 ИСПРАВЛЕНО (было full_name)
+          user.fullName = r['full_name'] ?? user.fullName;
           user.phone = r['phone'] ?? user.phone;
           user.tariff = r['tariff'] ?? user.tariff;
         }
