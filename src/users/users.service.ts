@@ -28,15 +28,17 @@ export class UsersService {
     const salt = await bcrypt.genSalt();
     const hashedPassword = await bcrypt.hash(createUserDto.password, salt);
 
-    // Используем 'as any' чтобы избежать конфликтов типов при создании (null vs undefined)
+    // Создаем объект сущности
     const newUser = this.usersRepository.create({
       email: createUserDto.email,
       passwordHash: hashedPassword,
       fullName: createUserDto.fullName || undefined, 
       tariff: 'Базовый',
-    } as any);
+    } as any); // Используем any для обхода строгих проверок при создании
 
-    const savedUser = await this.usersRepository.save(newUser);
+    // 👇 ИСПРАВЛЕНО: Явно указываем, что это (as User), чтобы TS не думал, что это массив
+    const savedUser = await this.usersRepository.save(newUser) as User;
+
     const { passwordHash, ...result } = savedUser;
     return result;
   }
@@ -76,7 +78,7 @@ export class UsersService {
     };
   }
 
-  // --- МЕТОДЫ ДЛЯ AUTH SERVICE (Исправление ошибок сборки) ---
+  // --- МЕТОДЫ ДЛЯ AUTH SERVICE ---
 
   async setPasswordResetToken(userId: number, token: string, expires: Date): Promise<void> {
     await this.update(userId, {
@@ -124,7 +126,7 @@ export class UsersService {
     }
   }
 
-  // --- МЕТОДЫ ДЛЯ DOCUMENT AI SERVICE (Исправление ошибок сборки) ---
+  // --- МЕТОДЫ ДЛЯ DOCUMENT AI SERVICE ---
 
   async startDocChat(userId: number, templateName: string): Promise<void> {
     await this.update(userId, {
@@ -162,7 +164,7 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  // --- МЕТОДЫ ДЛЯ SUBSCRIPTIONS И TASKS (Исправление ошибок сборки) ---
+  // --- МЕТОДЫ ДЛЯ SUBSCRIPTIONS И TASKS ---
 
   async activatePremium(userId: number, expirationDate: Date): Promise<void> {
     await this.update(userId, {
@@ -191,7 +193,6 @@ export class UsersService {
 
     const userIds = expiredUsers.map(user => user.id);
     
-    // Массовое обновление через QueryBuilder для эффективности
     await this.usersRepository
       .createQueryBuilder()
       .update(User)
